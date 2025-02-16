@@ -64,6 +64,7 @@ create_project_structure() {
         "tests/test_demo.cpp"
         "tests/CMakeLists.txt"
         ".github/workflows/ci.yml"
+        ".gitignore"
         "LICENSE"
         "README.md"
     )
@@ -302,7 +303,7 @@ endif()
 EOF
 }
 
-initialize_misc() {
+generate_miscs() {
     git init &>/dev/null
     clang-format --style=Google -dump-config >.clang-format
 
@@ -329,6 +330,59 @@ EOF
     cat <<EOF >README.md
 # $project_name_upper
 EOF
+
+    # Generate .gitignore
+    cat <<EOF >.gitignore
+# Build directories
+/build/
+/bin/
+/lib/
+/out/
+/CMakeFiles/
+/CMakeCache.txt
+/cmake_install.cmake
+/Makefile
+
+# IDE and editor specific files
+*.swp
+*.swo
+*.swn
+*.idea/
+.vscode/
+*.code-workspace
+
+# Generated files
+*.o
+*.obj
+*.so
+*.a
+*.lib
+*.dll
+*.exe
+*.dSYM/
+*.pdb
+*.pch
+*.ilk
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+*.cache
+
+# CTest related files
+/Testing/
+CTestTestfile.cmake
+
+# CLion specific
+cmake-build-*/
+
+# Conan and vcpkg
+conanbuildinfo.*
+conan.lock
+vcpkg_installed/
+vcpkg.buildinfo
+EOF
 }
 
 init_project() {
@@ -339,7 +393,7 @@ init_project() {
     generate_project_cmake
     generate_test_cmake
     generate_module_cmake
-    initialize_misc
+    generate_miscs
 
     echo "✅ Project created successfully!"
     echo "📁 Next steps:"
@@ -395,7 +449,6 @@ config_release() {
 }
 
 config() {
-    # let user to choose release or debug
     if [ "$1" == "debug" ]; then
         build_type=Debug
     elif [[ "$1" == "release" ]]; then
