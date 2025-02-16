@@ -2,7 +2,7 @@
 
 # Dependency check
 check_dependency() {
-    if ! command -v $1 &> /dev/null; then
+    if ! command -v $1 &>/dev/null; then
         echo "❌ $1 not found! Please install it first."
         exit 1
     fi
@@ -17,8 +17,11 @@ check_dependencies() {
 
 get_user_input() {
     read -p "📂 Project name (snake_case recommended): " project_name
-    [[ -z "$project_name" ]] && { echo "❌ Project name cannot be empty!"; exit 1; }
-    
+    [[ -z "$project_name" ]] && {
+        echo "❌ Project name cannot be empty!"
+        exit 1
+    }
+
     project_name_snake=$(echo "$project_name" | tr '[:upper:]' '[:lower:]' | tr ' ' '_')
     project_name_upper=$(echo "$project_name_snake" | tr '[:lower:]' '[:upper:]')
 
@@ -61,7 +64,6 @@ create_project_structure() {
         "tests/test_demo.cpp"
         "tests/CMakeLists.txt"
         ".github/workflows/ci.yml"
-        ".clang-tidy"
         "LICENSE"
         "README.md"
     )
@@ -77,8 +79,8 @@ create_project_structure() {
 
 generate_license() {
     case $license_type in
-        MIT)
-            cat <<EOF > LICENSE
+    MIT)
+        cat <<EOF >LICENSE
 MIT License
 
 Copyright (c) [year] [fullname]
@@ -94,12 +96,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
 EOF
-            ;;
-        Apache-2.0)
-            curl -s https://www.apache.org/licenses/LICENSE-2.0.txt > LICENSE
-            ;;
-        BSD-3-Clause)
-            cat <<EOF > LICENSE
+        ;;
+    Apache-2.0)
+        curl -s https://www.apache.org/licenses/LICENSE-2.0.txt >LICENSE
+        ;;
+    BSD-3-Clause)
+        cat <<EOF >LICENSE
 BSD 3-Clause License
 
 Copyright (c) [year], [fullname]
@@ -108,7 +110,7 @@ Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
 ...
 EOF
-            ;;
+        ;;
     esac
 
     sed -i "s/\[year\]/$(date +%Y)/" LICENSE
@@ -117,7 +119,7 @@ EOF
 
 generate_root_cmake() {
     # Generate root CMakeLists.txt
-    cat <<EOF > CMakeLists.txt
+    cat <<EOF >CMakeLists.txt
 cmake_minimum_required(VERSION ${cmake_version})
 
 project(
@@ -176,7 +178,7 @@ EOF
 }
 
 generate_project_cmake() {
-    cat <<EOF > "$project_name_snake/CMakeLists.txt"
+    cat <<EOF >"$project_name_snake/CMakeLists.txt"
 file(GLOB_RECURSE ${project_name_upper}_SRC CONFIGURE_DEPENDS src/*.cpp)
 
 add_library($project_name_snake STATIC)
@@ -187,7 +189,7 @@ EOF
 
 generate_test_cmake() {
     # Write test CMakeLists.txt
-    cat <<EOF > tests/CMakeLists.txt
+    cat <<EOF >tests/CMakeLists.txt
 include(FetchContent)
 
 # Download google-test
@@ -211,7 +213,7 @@ EOF
 
 generate_module_cmake() {
     # Write dependencies cmake
-    cat <<EOF > cmake/Dependencies.cmake
+    cat <<EOF >cmake/Dependencies.cmake
 include(FetchContent)
 
 FetchContent_Declare(
@@ -223,7 +225,7 @@ FetchContent_MakeAvailable(fmt)
 EOF
 
     # Write compiler warning cmake
-    cat <<EOF > cmake/CompilerWarnings.cmake
+    cat <<EOF >cmake/CompilerWarnings.cmake
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     message(STATUS "Enabling strict compiler warnings")
     add_compile_options(
@@ -263,7 +265,7 @@ endif()
 EOF
 
     # Write static analysis cmake
-    cat <<EOF > cmake/StaticAnalysis.cmake
+    cat <<EOF >cmake/StaticAnalysis.cmake
 # StaticAnalysis.cmake - Enable static analysis tools
 
 # clang-tidy
@@ -276,9 +278,11 @@ endif()
 # Configure clang-tidy
 set(CMAKE_CXX_CLANG_TIDY
     \${CLANG_TIDY_PATH}
-    -checks=*
+    -checks=clang-analyzer-*,modernize-*,performance-*,readability-*,bugprone-*
+    -extra-arg=-std=c++\${CMAKE_CXX_STANDARD}
     -warnings-as-errors=*
     -header-filter=.*
+    -format-style=file
 )
 
 message(STATUS "Enabled clang-tidy for static analysis")
@@ -291,7 +295,7 @@ if(CPPCHECK_PATH)
         --enable=all
         --suppress=missingIncludeSystem
         --inline-suppr
-        --std=c++${CMAKE_CXX_STANDARD}
+        --std=c++\${CMAKE_CXX_STANDARD}
     )
     message(STATUS "Enabled cppcheck for static analysis")
 endif()
@@ -299,11 +303,11 @@ EOF
 }
 
 initialize_misc() {
-    git init &> /dev/null
-    clang-format --style=Google -dump-config > .clang-format
+    git init &>/dev/null
+    clang-format --style=Google -dump-config >.clang-format
 
     # Generate CI configuration
-    cat <<EOF > .github/workflows/ci.yml
+    cat <<EOF >.github/workflows/ci.yml
 name: Modern C++ CI
 
 on: [push, pull_request]
@@ -321,42 +325,27 @@ jobs:
       run: ctest --test-dir build --output-on-failure
 EOF
 
-    # Generate clang-tidy config
-    cat <<EOF > .clang-tidy
-Checks: >
-    -*,
-    clang-analyzer-*,
-    modernize-*,
-    readability-*,
-    bugprone-*,
-    performance-*,
-    portability-*
-WarningsAsErrors: '*'
-HeaderFilterRegex: '.*'
-EOF
-    
     # Generate README.md
-    cat <<EOF > README.md
+    cat <<EOF >README.md
 # $project_name_upper
 EOF
 }
 
 init_project() {
-   check_dependencies
-   get_user_input
-   create_project_structure
-   generate_root_cmake
-   generate_project_cmake
-   generate_test_cmake
-   generate_module_cmake
-   initialize_misc
+    check_dependencies
+    get_user_input
+    create_project_structure
+    generate_root_cmake
+    generate_project_cmake
+    generate_test_cmake
+    generate_module_cmake
+    initialize_misc
 
-   echo "✅ Project created successfully!"
-   echo "📁 Next steps:"
-   echo "   cd ${project_name_snake}"
-   echo "   cmake -B build && cmake --build build"
+    echo "✅ Project created successfully!"
+    echo "📁 Next steps:"
+    echo "   cd ${project_name_snake}"
+    echo "   cmake -B build && cmake --build build"
 }
-
 
 show_help() {
     echo "Usage: $0 {init|build|release|test|install}"
@@ -375,7 +364,6 @@ show_version() {
     echo "icpp v1.0"
     exit 0
 }
-
 
 check_cmake_project() {
     if [ ! -f "CMakeLists.txt" ]; then
@@ -403,8 +391,8 @@ config_release() {
     check_cmake_project
     delete_cmake_cache
 
-    cmake -G $cmake_generator -B build -DCMAKE_BUILD_TYPE=Release
-} 
+    cmake -G $cmake_generator -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+}
 
 config() {
     # let user to choose release or debug
@@ -421,20 +409,28 @@ config() {
     fi
 }
 
-build() {
-    check_cmake_project
-
-    if [ -f "build/CMakeCache.txt" ]; then
+check_cmake_cache() {
+    if [ ! -f "build/CMakeCache.txt" ]; then
         echo "❌ Build directory exists. Please run 'icpp debug' or 'icpp release' first."
         exit 1
     fi
+}
+
+build() {
+    check_cmake_project
+    check_cmake_cache
 
     cmake --build build
 }
 
 run_tests() {
+    check_cmake_project
+    check_cmake_cache
+
     cmake --build build
-    (cd build && ctest; cd ..)
+    cd build
+    ctest
+    cd ..
 }
 
 install() {
@@ -449,29 +445,29 @@ install() {
 }
 
 case "$1" in
-    init)
-        init_project
-        ;;
-    config)
-        config
-        ;;
-    build)
-        build
-        ;;
-    test)
-        run_tests
-        ;;
-    install)
-        install
-        ;;
-    -v)
-        show_version
-        ;;
-    --help)
-        show_help
-        ;;
-    *)
-        echo "❌ Unknown command: $1"
-        show_help
-        ;;
+init)
+    init_project
+    ;;
+config)
+    config
+    ;;
+build)
+    build
+    ;;
+test)
+    run_tests
+    ;;
+install)
+    install
+    ;;
+-v)
+    show_version
+    ;;
+--help)
+    show_help
+    ;;
+*)
+    echo "❌ Unknown command: $1"
+    show_help
+    ;;
 esac
