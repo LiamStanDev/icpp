@@ -65,6 +65,7 @@ create_project_structure() {
         "tests/CMakeLists.txt"
         ".github/workflows/ci.yml"
         ".gitignore"
+        ".clang-tidy"
         "LICENSE"
         "README.md"
     )
@@ -279,11 +280,8 @@ endif()
 # Configure clang-tidy
 set(CMAKE_CXX_CLANG_TIDY
     \${CLANG_TIDY_PATH}
-    -checks=clang-analyzer-*,modernize-*,performance-*,readability-*,bugprone-*
     -extra-arg=-std=c++\${CMAKE_CXX_STANDARD}
-    -warnings-as-errors=*
-    -header-filter=.*
-    -format-style=file
+    -config=\${CMAKE_SOURCE_DIR}/.clang-tidy
 )
 
 message(STATUS "Enabled clang-tidy for static analysis")
@@ -307,6 +305,12 @@ generate_miscs() {
     git init &>/dev/null
     clang-format --style=Google -dump-config >.clang-format
 
+    cat <<EOF >.clang-tidy
+Checks: '-*,clang-analyzer-*,modernize-*,performance-*,readability-*,bugprone-*,-modernize-use-trailing-return-type,-readability-identifier-length'
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*'
+FormatStyle: file
+EOF
     # Generate CI configuration
     cat <<EOF >.github/workflows/ci.yml
 name: Modern C++ CI
