@@ -8,19 +8,17 @@ check_dependency() {
     fi
 }
 
-check_dependency "clang-format"
-check_dependency "clang-tidy"
-check_dependency "clang-tidy"
-check_dependency "cmake"
-check_dependency "git"
+check_dependencies() {
+    check_dependency "clang-format"
+    check_dependency "clang-tidy"
+    check_dependency "cmake"
+    check_dependency "git"
+}
 
-# Initialize project
-create_project() {
+get_user_input() {
     read -p "📂 Project name (snake_case recommended): " project_name
-    if [[ -z "$project_name" ]]; then
-        echo "❌ Project name cannot be empty!"
-        exit 1
-    fi
+    [[ -z "$project_name" ]] && { echo "❌ Project name cannot be empty!"; exit 1; }
+    
     project_name_snake=$(echo "$project_name" | tr '[:upper:]' '[:lower:]' | tr ' ' '_')
     project_name_upper=$(echo "$project_name_snake" | tr '[:lower:]' '[:upper:]')
 
@@ -33,20 +31,17 @@ create_project() {
     read -p "⚙️  Minimum CMake version [3.25]: " cmake_version
     cmake_version=${cmake_version:-3.25}
 
-    read -p "⚙️  Format Style (LLVM/GNU/Google/Chromium/Microsoft) [Google]: " cmake_version
-    cmake_version=${cmake_version:-3.25}
-
     read -p "📜 License type (MIT/Apache-2.0/BSD-3-Clause) [MIT]: " license_type
     license_type=${license_type:-MIT}
+}
 
-    # Create project structure
+create_project_structure() {
     mkdir -p "${project_name_snake}" || exit 1
     cd "${project_name_snake}" || exit 1
 
     echo "🚀 Creating project structure for '$project_name'..."
 
-    # Create Structure
-    dirs=(
+    local dirs=(
         ".github/workflows"
         "cmake"
         "$project_name_snake/include/$project_name_snake"
@@ -55,7 +50,7 @@ create_project() {
         "docs"
     )
 
-    files=(
+    local files=(
         "CMakeLists.txt"
         "cmake/Dependencies.cmake"
         "cmake/CompilerWarnings.cmake"
@@ -71,18 +66,56 @@ create_project() {
         "README.md"
     )
 
-    # Create directories
     for dir in "${dirs[@]}"; do
-        mkdir -p "$dir"
-        echo "  📁 Created directory: $dir"
+        mkdir -p "$dir" && echo "  📁 Created directory: $dir"
     done
 
-    # Create files
     for file in "${files[@]}"; do
-        touch "$file"
-        echo "  📄 Created file: $file"
+        touch "$file" && echo "  📄 Created file: $file"
     done
+}
 
+generate_license() {
+    case $license_type in
+        MIT)
+            cat <<EOF > LICENSE
+MIT License
+
+Copyright (c) [year] [fullname]
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+EOF
+            ;;
+        Apache-2.0)
+            curl -s https://www.apache.org/licenses/LICENSE-2.0.txt > LICENSE
+            ;;
+        BSD-3-Clause)
+            cat <<EOF > LICENSE
+BSD 3-Clause License
+
+Copyright (c) [year], [fullname]
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+...
+EOF
+            ;;
+    esac
+
+    sed -i "s/\[year\]/$(date +%Y)/" LICENSE
+    sed -i "s/\[fullname\]/$(git config --get user.name)/" LICENSE
+}
+
+generate_root_cmake() {
     # Generate root CMakeLists.txt
     cat <<EOF > CMakeLists.txt
 cmake_minimum_required(VERSION ${cmake_version})
@@ -118,7 +151,6 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 message(STATUS "Project: \${PROJECT_NAME} (v\${PROJECT_VERSION})")
-message(STATUS "Build type: \${CMAKE_BUILD_TYPE}")
 message(STATUS "Compiler: \${CMAKE_CXX_COMPILER_ID} (\${CMAKE_CXX_COMPILER})")
 message(STATUS "C++ standard: C++\${CMAKE_CXX_STANDARD}")
 
@@ -141,8 +173,9 @@ if(${project_name_upper}_ENABLE_CLANG_TIDY)
     include(StaticAnalysis)
 endif()
 EOF
+}
 
-    # Write subdirectory CMakeLists.txt
+generate_project_cmake() {
     cat <<EOF > "$project_name_snake/CMakeLists.txt"
 file(GLOB_RECURSE ${project_name_upper}_SRC CONFIGURE_DEPENDS src/*.cpp)
 
@@ -150,7 +183,9 @@ add_library($project_name_snake STATIC)
 target_sources($project_name_snake PRIVATE \${${project_name_upper}_SRC})
 target_include_directories($project_name_snake PUBLIC \${CMAKE_CURRENT_SOURCE_DIR}/include)
 EOF
+}
 
+generate_test_cmake() {
     # Write test CMakeLists.txt
     cat <<EOF > tests/CMakeLists.txt
 include(FetchContent)
@@ -172,6 +207,9 @@ include(GoogleTest)
 gtest_discover_tests(test_runner)
 EOF
 
+}
+
+generate_module_cmake() {
     # Write dependencies cmake
     cat <<EOF > cmake/Dependencies.cmake
 include(FetchContent)
@@ -224,7 +262,7 @@ else()
 endif()
 EOF
 
-    # Write dependencies cmake
+    # Write static analysis cmake
     cat <<EOF > cmake/StaticAnalysis.cmake
 # StaticAnalysis.cmake - Enable static analysis tools
 
@@ -258,6 +296,11 @@ if(CPPCHECK_PATH)
     message(STATUS "Enabled cppcheck for static analysis")
 endif()
 EOF
+}
+
+initialize_misc() {
+    git init &> /dev/null
+    clang-format --style=Google -dump-config > .clang-format
 
     # Generate CI configuration
     cat <<EOF > .github/workflows/ci.yml
@@ -291,32 +334,144 @@ Checks: >
 WarningsAsErrors: '*'
 HeaderFilterRegex: '.*'
 EOF
-
-    # Generate license
-    case $license_type in
-        MIT)
-            curl -s https://opensource.org/licenses/MIT > LICENSE
-            sed -i "s/<year>/$(date +%Y)/" LICENSE
-            sed -i "s/<copyright holders>/$(git config --get user.name)/" LICENSE
-            ;;
-        Apache-2.0)
-            curl -s https://www.apache.org/licenses/LICENSE-2.0.txt > LICENSE
-            ;;
-        BSD-3-Clause)
-            curl -s https://opensource.org/licenses/BSD-3-Clause > LICENSE
-            ;;
-    esac
-
-    # Initialize git repo
-    git init &> /dev/null
-
-    # Initialize formatter
-    clang-format --style=Google -dump-config > .clang-format
-
-    echo "✅ Project created successfully!"
-    echo "📁 Next steps:"
-    echo "   cd ${project_name_snake}"
-    echo "   cmake -B build && cmake --build build"
+    
+    # Generate README.md
+    cat <<EOF > README.md
+# $project_name_upper
+EOF
 }
 
-create_project
+init_project() {
+   check_dependencies
+   get_user_input
+   create_project_structure
+   generate_root_cmake
+   generate_project_cmake
+   generate_test_cmake
+   generate_module_cmake
+   initialize_misc
+
+   echo "✅ Project created successfully!"
+   echo "📁 Next steps:"
+   echo "   cd ${project_name_snake}"
+   echo "   cmake -B build && cmake --build build"
+}
+
+
+show_help() {
+    echo "Usage: $0 {init|build|release|test|install}"
+    echo "Commands:"
+    echo "  init      Initialize project"
+    echo "  config    Config debug or release build"
+    echo "  build     Build the project"
+    echo "  test      Run tests"
+    echo "  install   Install the project"
+    echo "  -v        Show script version"
+    echo "  --help    Show this help message"
+    exit 0
+}
+
+show_version() {
+    echo "icpp v1.0"
+    exit 0
+}
+
+
+check_cmake_project() {
+    if [ ! -f "CMakeLists.txt" ]; then
+        echo "❌ Not a CMake project! Please run 'icpp init' first."
+        exit 1
+    fi
+}
+
+delete_cmake_cache() {
+    if [ -f "build/CMakeCache.txt" ]; then
+        rm -f build/CMakeCache.txt
+    fi
+}
+
+config_debug() {
+    check_cmake_project
+    delete_cmake_cache
+    if [ -f "build/CMakeCache.txt" ]; then
+        rm -f build/CMakeCache.txt
+    fi
+    cmake -G $cmake_generator -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+}
+
+config_release() {
+    check_cmake_project
+    delete_cmake_cache
+
+    cmake -G $cmake_generator -B build -DCMAKE_BUILD_TYPE=Release
+} 
+
+config() {
+    # let user to choose release or debug
+    read -p "⚙️  Build type (Debug/Release) [Debug]: " build_type
+    build_type=${build_type:-Debug}
+
+    read -p "⚙️  Generator (Ninja/Unix Makefiles) [Ninja]: " cmake_generator
+    cmake_generator=${cmake_generator:-Ninja}
+
+    if [ "$build_type" == "Debug" ]; then
+        config_debug
+    else
+        config_release
+    fi
+}
+
+build() {
+    check_cmake_project
+
+    if [ -f "build/CMakeCache.txt" ]; then
+        echo "❌ Build directory exists. Please run 'icpp debug' or 'icpp release' first."
+        exit 1
+    fi
+
+    cmake --build build
+}
+
+run_tests() {
+    cmake --build build
+    (cd build && ctest; cd ..)
+}
+
+install() {
+    check_cmake_project
+
+    if [ -f "build/CMakeCache.txt" ]; then
+        echo "❌ Build directory exists. Please run 'icpp debug' or 'icpp release' first."
+        exit 1
+    fi
+
+    cmake --build build --target install
+}
+
+case "$1" in
+    init)
+        init_project
+        ;;
+    config)
+        config
+        ;;
+    build)
+        build
+        ;;
+    test)
+        run_tests
+        ;;
+    install)
+        install
+        ;;
+    -v)
+        show_version
+        ;;
+    --help)
+        show_help
+        ;;
+    *)
+        echo "❌ Unknown command: $1"
+        show_help
+        ;;
+esac
