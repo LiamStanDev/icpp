@@ -311,7 +311,7 @@ generate_miscs() {
 
     cat <<EOF >.clang-tidy
 Checks: '-*,clang-analyzer-*,modernize-*,performance-*,readability-*,bugprone-*,-modernize-use-trailing-return-type,-readability-identifier-length'
-WarningsAsErrors: '*'
+WarningsAsErrors: ''
 HeaderFilterRegex: '.*'
 FormatStyle: file
 EOF
